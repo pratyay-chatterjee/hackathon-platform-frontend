@@ -38,9 +38,8 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
     try {
       setIsScanning(true);
       setCameraError(null);
-      setIsProcessing(false); // Reset processing state
+      setIsProcessing(false);
 
-      // Check if camera is available
       const hasCamera = await QrScanner.hasCamera();
       setHasCamera(hasCamera);
 
@@ -50,45 +49,36 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
         return;
       }
 
-      // Initialize QR Scanner
+      // Manually trigger permission prompt
+      await navigator.mediaDevices.getUserMedia({ video: true });
+
+      // Confirm videoRef is still in the DOM
+      if (!videoRef.current?.isConnected) {
+        setCameraError('Camera not attached to DOM. Try reloading the page.');
+        setIsScanning(false);
+        return;
+      }
+
       qrScannerRef.current = new QrScanner(
         videoRef.current,
         (result) => {
-          console.log('QR Code detected:', result.data);
-          
-          // Prevent multiple processing of the same scan
-          if (isProcessing || scanComplete) {
-            console.log('Already processing or scan complete, ignoring...');
-            return;
-          }
+          if (isProcessing || scanComplete) return;
 
-          // Validate if the scanned data is an email
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
           if (emailRegex.test(result.data)) {
             const email = result.data.trim().toLowerCase();
-            
-            // Check if this email was already processed in this session
+
             if (processedEmailsRef.current.has(email)) {
-              console.log('Email already processed in this session:', email);
               onScanError('This participant has already been scanned in this session');
               return;
             }
 
-            // Set processing state immediately to prevent duplicate scans
             setIsProcessing(true);
-            console.log('Processing email:', email);
-            
-            // Add to processed emails
             processedEmailsRef.current.add(email);
-            
-            // Stop scanner immediately
             stopScanner();
-            
-            // Set scan complete state
+
             setLastScannedEmail(email);
             setScanComplete(true);
-            
-            // Call success callback
             onScanSuccess(email);
           } else {
             onScanError('Scanned QR code does not contain a valid email address');
@@ -98,7 +88,7 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
           returnDetailedScanResult: true,
           highlightScanRegion: true,
           highlightCodeOutline: true,
-          maxScansPerSecond: 1, // Limit scan frequency
+          maxScansPerSecond: 1,
         }
       );
 
@@ -107,7 +97,7 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
       console.log('QR Scanner started successfully');
     } catch (error: any) {
       console.error('Error initializing QR scanner:', error);
-      setCameraError(error.message || 'Failed to access camera');
+      setCameraError(error.message || 'Failed to access camera. Please check permissions.');
       setIsScanning(false);
       setIsProcessing(false);
       onScanError('Failed to access camera. Please check permissions.');
@@ -116,7 +106,6 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
 
   const stopScanner = () => {
     if (qrScannerRef.current) {
-      console.log('Stopping QR scanner...');
       qrScannerRef.current.stop();
       qrScannerRef.current.destroy();
       qrScannerRef.current = null;
@@ -125,21 +114,18 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
   };
 
   const restartScanner = () => {
-    console.log('Restarting scanner for next participant...');
     setScanComplete(false);
     setLastScannedEmail(null);
     setCameraError(null);
     setIsProcessing(false);
-    // Note: We don't clear processedEmailsRef to prevent re-scanning same emails
   };
 
   const resetSession = () => {
-    console.log('Resetting entire scanning session...');
     setScanComplete(false);
     setLastScannedEmail(null);
     setCameraError(null);
     setIsProcessing(false);
-    processedEmailsRef.current.clear(); // Clear processed emails for new session
+    processedEmailsRef.current.clear();
   };
 
   return (
@@ -150,7 +136,6 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
             <Camera className="h-6 w-6 mr-2" />
             QR CODE SCANNER
           </h3>
-          
           <div className="flex space-x-2">
             {scanComplete && (
               <motion.button
@@ -163,7 +148,6 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
                 SCAN NEXT
               </motion.button>
             )}
-            
             {processedEmailsRef.current.size > 0 && (
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -177,7 +161,6 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
           </div>
         </div>
 
-        {/* Session Info */}
         {processedEmailsRef.current.size > 0 && (
           <div className="mb-4 p-3 bg-accent/10 border-2 border-primary">
             <p className="font-inter text-primary text-sm">
@@ -205,7 +188,6 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
             </motion.button>
           </div>
         ) : scanComplete ? (
-          /* Scan Complete State */
           <div className="bg-accent/10 border-2 border-accent p-6 text-center">
             <motion.div
               initial={{ scale: 0 }}
@@ -243,8 +225,6 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
               playsInline
               muted
             />
-            
-            {/* Scanning Overlay */}
             {isScanning && !isProcessing && (
               <motion.div
                 className="absolute inset-0 border-4 border-accent"
@@ -278,8 +258,6 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
                 </div>
               </motion.div>
             )}
-
-            {/* Processing Overlay */}
             {isProcessing && (
               <div className="absolute inset-0 bg-accent/20 flex items-center justify-center">
                 <div className="bg-background border-2 border-primary p-4">
@@ -292,8 +270,6 @@ export default function QRScanner({ onScanSuccess, onScanError, isActive }: QRSc
                 </div>
               </div>
             )}
-
-            {/* Loading State */}
             {!isScanning && isActive && !cameraError && !scanComplete && !isProcessing && (
               <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
                 <div className="bg-background border-2 border-primary p-4">
